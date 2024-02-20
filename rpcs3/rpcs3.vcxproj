@@ -1721,6 +1721,7 @@
     <ClInclude Include="rpcs3qt\trophy_notification_helper.h" />
     <ClInclude Include="rpcs3qt\user_account.h" />
     <ClInclude Include="Input\xinput_pad_handler.h" />
+    <ClInclude Include="skyslots.h" />
     <ClInclude Include="\rpcs3qt\*.h" />
   </ItemGroup>
   <ItemGroup>

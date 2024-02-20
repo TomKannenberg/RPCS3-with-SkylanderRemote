@@ -437,6 +437,8 @@ void run_platform_sanity_checks()
 
 int main(int argc, char** argv)
 {
+	AllocConsole();
+	freopen("CONOUT$", "w", stdout);
 #ifdef _WIN32
 	ULONG64 intro_cycles{};
 	QueryThreadCycleTime(GetCurrentThread(), &intro_cycles);

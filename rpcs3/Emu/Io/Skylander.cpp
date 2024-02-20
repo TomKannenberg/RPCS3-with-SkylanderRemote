@@ -24,6 +24,8 @@ void skylander::save()
 
 void sky_portal::activate()
 {
+
+
 	std::lock_guard lock(sky_mutex);
 	if (activated)
 	{
@@ -41,11 +43,139 @@ void sky_portal::activate()
 		}
 	}
 
+	wchar_t buffer[MAX_PATH];
+	GetModuleFileName(NULL, buffer, MAX_PATH);
+	std::filesystem::path exePath(buffer);
+	std::filesystem::path coresPath = exePath.parent_path() / "Skylanders" / "Cores";
+	coresPathStr = coresPath.string() + "/";
+
+	std::thread tcpthread(&sky_portal::tcp_loop, this);
+	tcpthread.detach();
+
 	activated = true;
+}
+
+void sky_portal::tcp_loop() {
+
+	WSADATA wsaData;
+	SOCKET serverSocket, clientSocket;
+	struct sockaddr_in serverAddr, clientAddr;
+	int clientAddrSize = sizeof(clientAddr);
+	char buffer[1024];
+
+	std::string receivedData;
+
+	if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0)
+	{
+		std::cout << "TCP SETUP FAIL STARTUP!" << std::endl;
+		return;	
+	}
+
+	serverSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+
+	if (serverSocket == INVALID_SOCKET)
+	{
+		std::cout << "TCP SETUP FAIL INVALID SOCKET!" << std::endl;
+		return;
+		WSACleanup();
+	}
+
+	serverAddr.sin_family = AF_INET;
+	serverAddr.sin_addr.s_addr = INADDR_ANY;
+	serverAddr.sin_port = htons(187);
+
+	if (bind(serverSocket, (SOCKADDR*)&serverAddr, sizeof(serverAddr)) == SOCKET_ERROR)
+	{
+		std::cout << "TCP SETUP FAIL BINDING!" << std::endl;
+		return;
+		closesocket(serverSocket);
+		WSACleanup();
+	}
+
+	if (listen(serverSocket, SOMAXCONN) == SOCKET_ERROR)
+	{
+		std::cout << "TCP SETUP FAIL LISTEN!" << std::endl;
+		return;
+		closesocket(serverSocket);
+		WSACleanup();
+	}
+
+	while (true)
+	{
+		clientSocket = accept(serverSocket, (SOCKADDR*)&clientAddr, &clientAddrSize);
+		if (clientSocket == INVALID_SOCKET)
+		{
+			std::cout << "TCP SETUP FAIL MID RUN!" << std::endl;
+			closesocket(serverSocket);
+			WSACleanup();
+			return;
+		}
+
+		while (true)
+		{
+			int bytesReceived = recv(clientSocket, buffer, sizeof(buffer), 0);
+			if (bytesReceived > 0)
+			{
+				buffer[bytesReceived] = '\0';
+				receivedData = buffer;
+				receivedData.pop_back();
+				std::cout << "Received from client: " << receivedData << std::endl;
+				load_skylander_app(receivedData);
+			}
+			else if (bytesReceived == 0)
+			{
+				break;
+			}
+			else
+			{
+				break;
+			}
+		}
+
+		closesocket(clientSocket);
+	}
+}
+ 
+void sky_portal::load_skylander_app(std::string name) {
+
+	fs::file sky_file(coresPathStr + name + ".sky", fs::read + fs::write + fs::lock);
+
+	std::string skystr = coresPathStr + name + ".sky";
+
+	if (!sky_file)
+	{
+		std::cout << "Failed to open file! " << skystr << std::endl;
+		return;
+	}
+
+	std::array<u8, 0x40 * 0x10> data;
+	if (sky_file.read(data.data(), data.size()) != data.size())
+	{
+
+		std::cout << "Failed to copy file!" << std::endl;
+		return;
+	}
+
+	if (auto slot_infos = sky_slots[0])
+	{
+		auto [cur_slot, id, var] = slot_infos.value();
+		g_skyportal.remove_skylander(cur_slot, true);
+		sky_slots[0] = {};
+	}
+
+	u16 sky_id = reinterpret_cast<le_t<u16>&>(data[0x10]);
+	u16 sky_var = reinterpret_cast<le_t<u16>&>(data[0x1C]);
+
+	u8 portal_slot = g_skyportal.load_skylander(data.data(), std::move(sky_file), true);
+
+	sky_slots[0] = std::tuple(0, sky_id, sky_var);
+
+	std::cout << "Succesfully loaded " << name << " !" << std::endl;
 }
 
 void sky_portal::deactivate()
 {
+	std::cout << "D!" << std::endl;
 	std::lock_guard lock(sky_mutex);
 
 	for (auto& s : skylanders)
@@ -57,6 +187,8 @@ void sky_portal::deactivate()
 			s.queued_status = std::queue<u8>();
 		}
 
+
+
 		s.status &= 1;
 	}
 
@@ -65,6 +197,7 @@ void sky_portal::deactivate()
 
 void sky_portal::set_leds(u8 r, u8 g, u8 b)
 {
+	std::cout << "L!" << std::endl;
 	std::lock_guard lock(sky_mutex);
 	this->r = r;
 	this->g = g;
@@ -100,6 +233,7 @@ void sky_portal::get_status(u8* reply_buf)
 
 void sky_portal::query_block(u8 sky_num, u8 block, u8* reply_buf)
 {
+	
 	std::lock_guard lock(sky_mutex);
 
 	const auto& thesky = skylanders[sky_num];
@@ -120,12 +254,9 @@ void sky_portal::query_block(u8 sky_num, u8 block, u8* reply_buf)
 void sky_portal::write_block(u8 sky_num, u8 block, const u8* to_write_buf, u8* reply_buf)
 {
 	std::lock_guard lock(sky_mutex);
-
 	auto& thesky = skylanders[sky_num];
-
 	reply_buf[0] = 'W';
 	reply_buf[2] = block;
-
 	if (thesky.status & 1)
 	{
 		reply_buf[1] = (0x10 | sky_num);
@@ -138,9 +269,14 @@ void sky_portal::write_block(u8 sky_num, u8 block, const u8* to_write_buf, u8* r
 	}
 }
 
-bool sky_portal::remove_skylander(u8 sky_num)
+bool sky_portal::remove_skylander(u8 sky_num, bool f)
 {
-	std::lock_guard lock(sky_mutex);
+	std::cout << "R!" << std::endl;
+	if (!f)
+	{
+		std::lock_guard lock(sky_mutex);
+	}
+
 	auto& thesky = skylanders[sky_num];
 
 	if (thesky.status & 1)
@@ -155,9 +291,13 @@ bool sky_portal::remove_skylander(u8 sky_num)
 	return false;
 }
 
-u8 sky_portal::load_skylander(u8* buf, fs::file in_file)
+u8 sky_portal::load_skylander(u8* buf, fs::file in_file, bool f)
 {
-	std::lock_guard lock(sky_mutex);
+	std::cout << "L!" << std::endl;
+	if (!f)
+	{
+		std::lock_guard lock(sky_mutex);
+	}
 
 	const u32 sky_serial = read_from_ptr<le_t<u32>>(buf);
 	u8 found_slot  = 0xFF;
@@ -196,6 +336,7 @@ u8 sky_portal::load_skylander(u8* buf, fs::file in_file)
 usb_device_skylander::usb_device_skylander(const std::array<u8, 7>& location)
 	: usb_device_emulated(location)
 {
+	std::cout << "U!" << std::endl;
 	device        = UsbDescriptorNode(USB_DESCRIPTOR_DEVICE, UsbDeviceDescriptor{0x0200, 0x00, 0x00, 0x00, 0x40, 0x1430, 0x0150, 0x0100, 0x01, 0x02, 0x00, 0x01});
 	auto& config0 = device.add_node(UsbDescriptorNode(USB_DESCRIPTOR_CONFIG, UsbDeviceConfiguration{0x0029, 0x01, 0x01, 0x00, 0x80, 0xFA}));
 	config0.add_node(UsbDescriptorNode(USB_DESCRIPTOR_INTERFACE, UsbDeviceInterface{0x00, 0x00, 0x02, 0x03, 0x00, 0x00, 0x00}));

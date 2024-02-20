@@ -18,7 +18,7 @@
 #include <QCompleter>
 
 skylander_dialog* skylander_dialog::inst = nullptr;
-std::optional<std::tuple<u8, u16, u16>> skylander_dialog::sky_slots[UI_SKY_NUM];
+
 QString last_skylander_path;
 
 const std::map<const std::pair<const u16, const u16>, const std::string> list_skylanders = {
@@ -782,6 +782,7 @@ void skylander_dialog::load_skylander(u8 slot)
 void skylander_dialog::load_skylander_path(u8 slot, const QString& path)
 {
 	fs::file sky_file(path.toStdString(), fs::read + fs::write + fs::lock);
+	
 	if (!sky_file)
 	{
 		QMessageBox::warning(this, tr("Failed to open the skylander file!"), tr("Failed to open the skylander file(%1)!\nFile may already be in use on the portal.").arg(path), QMessageBox::Ok);

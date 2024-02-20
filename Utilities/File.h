@@ -345,7 +345,9 @@ namespace fs
 			const char* file = __builtin_FILE(),
 			const char* func = __builtin_FUNCTION()) const
 		{
-			if (!m_file) xnull({line, col, file, func});
+			if (!m_file) {
+				xnull({line, col, file, func});
+			}
 			return m_file->write(buffer, count);
 		}
 

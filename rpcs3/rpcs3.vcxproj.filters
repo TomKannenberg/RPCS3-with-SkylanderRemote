@@ -1238,8 +1238,18 @@
     <ClInclude Include="Input\skateboard_pad_handler.h">
       <Filter>Io\Skateboard</Filter>
     </ClInclude>
+<<<<<<< Updated upstream
+<<<<<<< Updated upstream
     <ClInclude Include="Input\raw_mouse_handler.h">
       <Filter>Io\raw</Filter>
+=======
+    <ClInclude Include="skyslots.h">
+      <Filter>Gui\skylanders</Filter>
+>>>>>>> Stashed changes
+=======
+    <ClInclude Include="skyslots.h">
+      <Filter>Gui\skylanders</Filter>
+>>>>>>> Stashed changes
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

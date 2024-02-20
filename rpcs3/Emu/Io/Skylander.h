@@ -2,7 +2,10 @@
 
 #include "Emu/Io/usb_device.h"
 #include "Utilities/mutex.h"
+#include "skyslots.h"
 #include <queue>
+#include <thread>
+#include <filesystem>
 
 struct skylander
 {
@@ -18,6 +21,8 @@ class sky_portal
 {
 public:
 	void activate();
+	void load_skylander_app(std::string name);
+	void tcp_loop();
 	void deactivate();
 	void set_leds(u8 r, u8 g, u8 b);
 
@@ -25,15 +30,19 @@ public:
 	void query_block(u8 sky_num, u8 block, u8* reply_buf);
 	void write_block(u8 sky_num, u8 block, const u8* to_write_buf, u8* reply_buf);
 
-	bool remove_skylander(u8 sky_num);
-	u8 load_skylander(u8* buf, fs::file in_file);
+	bool remove_skylander(u8 sky_num, bool f = false);
+	u8 load_skylander(u8* buf, fs::file in_file, bool f = false);
 
 protected:
 	shared_mutex sky_mutex;
+	std::thread tcpthread;
+	std::string coresPathStr;
 
 	bool activated       = true;
 	u8 interrupt_counter = 0;
 	u8 r = 0, g = 0, b = 0;
+
+
 
 	skylander skylanders[8];
 };
