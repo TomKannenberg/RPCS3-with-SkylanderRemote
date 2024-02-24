@@ -21,7 +21,7 @@ class sky_portal
 {
 public:
 	void activate();
-	void load_skylander_app(std::string name);
+	void load_skylander_app(std::string name, u32 slot);
 	void tcp_loop();
 	void deactivate();
 	void set_leds(u8 r, u8 g, u8 b);
@@ -30,15 +30,23 @@ public:
 	void query_block(u8 sky_num, u8 block, u8* reply_buf);
 	void write_block(u8 sky_num, u8 block, const u8* to_write_buf, u8* reply_buf);
 
-	bool remove_skylander(u8 sky_num, bool f = false);
-	u8 load_skylander(u8* buf, fs::file in_file, bool f = false);
+	bool remove_skylander(u8 sky_num);
+	u8 load_skylander(u8* buf, fs::file in_file);
+	u8 load_skylander_slot(u8* buf, fs::file in_file, u8 slot_num);
 
 protected:
 	shared_mutex sky_mutex;
 	std::thread tcpthread;
 	std::string coresPathStr;
+	std::string topsPathStr;
+	std::string botsPathStr;
+	std::string trapsPathStr;
+	bool accessAllowed = true;
 
 	bool activated       = true;
+	bool first[8] = { 1 };
+
+	bool inUse = false;
 	u8 interrupt_counter = 0;
 	u8 r = 0, g = 0, b = 0;
 

@@ -47,7 +47,13 @@ void sky_portal::activate()
 	GetModuleFileName(NULL, buffer, MAX_PATH);
 	std::filesystem::path exePath(buffer);
 	std::filesystem::path coresPath = exePath.parent_path() / "Skylanders" / "Cores";
+	std::filesystem::path topsPath = exePath.parent_path() / "Skylanders" / "Swappers" / "Tops";
+	std::filesystem::path botsPath = exePath.parent_path() / "Skylanders" / "Swappers" / "Bottoms";
+	std::filesystem::path trapsPath = exePath.parent_path() / "Skylanders" / "Traps";
 	coresPathStr = coresPath.string() + "/";
+	topsPathStr = topsPath.string() + "/";
+	botsPathStr = botsPath.string() + "/";
+	trapsPathStr = trapsPath.string() + "/";
 
 	std::thread tcpthread(&sky_portal::tcp_loop, this);
 	tcpthread.detach();
@@ -120,7 +126,39 @@ void sky_portal::tcp_loop() {
 				receivedData = buffer;
 				receivedData.pop_back();
 				std::cout << "Received from client: " << receivedData << std::endl;
-				load_skylander_app(receivedData);
+				char sslot = receivedData[0];
+				u32 slot = atoi(&sslot);
+				receivedData = receivedData.substr(1);
+				std::string* skylanderToSend = &coresPathStr;
+
+				std::cout << slot << " is the received numba!" << std::endl;
+
+				if (slot > 0)
+				{
+
+					switch (slot)
+					{
+						case 1:
+							skylanderToSend = &topsPathStr;
+							std::cout << "TopLander" << std::endl;
+							break;
+
+						case 2:
+							skylanderToSend = &botsPathStr;
+							std::cout << "BottomLander" << std::endl;
+							break;
+						case 3:
+							skylanderToSend = &trapsPathStr;
+							std::cout << "Trap" << std::endl;
+							break;
+
+					}
+
+					--slot;
+
+				}
+
+				load_skylander_app(*skylanderToSend + receivedData + ".sky", slot);
 			}
 			else if (bytesReceived == 0)
 			{
@@ -136,17 +174,24 @@ void sky_portal::tcp_loop() {
 	}
 }
  
-void sky_portal::load_skylander_app(std::string name) {
+void sky_portal::load_skylander_app(std::string name, u32 slot) {
 
-	fs::file sky_file(coresPathStr + name + ".sky", fs::read + fs::write + fs::lock);
+	
 
-	std::string skystr = coresPathStr + name + ".sky";
+	std::cout << "Error1" << std::endl;
+	std::cout << "open file! " << name << std::endl;
+
+	inUse = true;
+
+	fs::file sky_file(name, fs::read + fs::write + fs::lock);
 
 	if (!sky_file)
 	{
-		std::cout << "Failed to open file! " << skystr << std::endl;
+		std::cout << "Failed to open file! " << name << std::endl;
 		return;
 	}
+
+	std::cout << "Error2" << std::endl;
 
 	std::array<u8, 0x40 * 0x10> data;
 	if (sky_file.read(data.data(), data.size()) != data.size())
@@ -156,19 +201,37 @@ void sky_portal::load_skylander_app(std::string name) {
 		return;
 	}
 
-	if (auto slot_infos = sky_slots[0])
+	std::cout << "Error3" << std::endl;
+
+	if (auto slot_infos = sky_slots[slot])
 	{
+		std::cout << "Error4i" << std::endl;
 		auto [cur_slot, id, var] = slot_infos.value();
-		g_skyportal.remove_skylander(cur_slot, true);
-		sky_slots[0] = {};
+		std::cout << "Error5i" << std::endl;
+		inUse = false;
+		g_skyportal.remove_skylander(cur_slot);
+		inUse = true;
+		std::cout << "Error6i" << std::endl;
+		sky_slots[slot] = {};
+		std::cout << "Error7i" << std::endl;
 	}
+
+	std::cout << "Error8" << std::endl;
 
 	u16 sky_id = reinterpret_cast<le_t<u16>&>(data[0x10]);
 	u16 sky_var = reinterpret_cast<le_t<u16>&>(data[0x1C]);
 
-	u8 portal_slot = g_skyportal.load_skylander(data.data(), std::move(sky_file), true);
+	std::cout << "Error9" << std::endl;
 
-	sky_slots[0] = std::tuple(0, sky_id, sky_var);
+	inUse = false;
+	u8 portal_slot = g_skyportal.load_skylander_slot(data.data(), std::move(sky_file), slot);
+
+	first[portal_slot] = false;
+
+	std::cout << slot << " IS THE SLOT" << std::endl;
+	std::cout << portal_slot << " IS THE FINAL SLOT" << std::endl;
+
+	sky_slots[slot] = std::tuple(slot, sky_id, sky_var);
 
 	std::cout << "Succesfully loaded " << name << " !" << std::endl;
 }
@@ -269,34 +332,56 @@ void sky_portal::write_block(u8 sky_num, u8 block, const u8* to_write_buf, u8* r
 	}
 }
 
-bool sky_portal::remove_skylander(u8 sky_num, bool f)
+bool sky_portal::remove_skylander(u8 sky_num)
 {
-	std::cout << "R!" << std::endl;
-	if (!f)
+	if (first[sky_num])
 	{
+		return false;
+	}
+
+	std::cout << "R!" << std::endl;
+
+	while (inUse)
+	{
+		Sleep(1);
+	}
+
+	std::cout << "R2!" << std::endl;
+
+	if (false)
+	{
+		std::cout << "R3!" << std::endl;
 		std::lock_guard lock(sky_mutex);
 	}
 
+	std::cout << "R3!" << std::endl;
 	auto& thesky = skylanders[sky_num];
 
 	if (thesky.status & 1)
 	{
+		std::cout << "R4!" << std::endl;
 		thesky.status = 2;
+		std::cout << "R5!" << std::endl;
 		thesky.queued_status.push(2);
+		std::cout << "R6!" << std::endl;
 		thesky.queued_status.push(0);
+		std::cout << "R7!" << std::endl;
 		thesky.sky_file.close();
+		std::cout << "R8!" << std::endl;
 		return true;
 	}
+
+	std::cout << "R4!" << std::endl;
 
 	return false;
 }
 
-u8 sky_portal::load_skylander(u8* buf, fs::file in_file, bool f)
+u8 sky_portal::load_skylander(u8* buf, fs::file in_file)
 {
 	std::cout << "L!" << std::endl;
-	if (!f)
+	if (false)
 	{
-		std::lock_guard lock(sky_mutex);
+		//std::lock_guard lock(sky_mutex);
 	}
 
 	const u32 sky_serial = read_from_ptr<le_t<u32>>(buf);
@@ -331,6 +416,41 @@ u8 sky_portal::load_skylander(u8* buf, fs::file in_file, bool f)
 	thesky.last_id = sky_serial;
 
 	return found_slot;
+}
+
+u8 sky_portal::load_skylander_slot(u8* buf, fs::file in_file, u8 slot_num)
+{
+	std::cout << "L!" << std::endl;
+	while (inUse)
+	{
+		//std::lock_guard lock(sky_mutex);
+		Sleep(1);
+	}
+
+	const u32 sky_serial = read_from_ptr<le_t<u32>>(buf);
+
+	std::cout << "L1!" << std::endl;
+
+	ensure(slot_num != 0xFF);
+
+	std::cout << "L2!" << std::endl;
+
+	skylander& thesky = skylanders[slot_num];
+	std::cout << "L3!" << std::endl;
+	memcpy(thesky.data.data(), buf, thesky.data.size());
+	std::cout << "L4!" << std::endl;
+	thesky.sky_file = std::move(in_file);
+	std::cout << "L5!" << std::endl;
+	thesky.status = 3;
+	std::cout << "L6!" << std::endl;
+	thesky.queued_status.push(3);
+	std::cout << "L7!" << std::endl;
+	thesky.queued_status.push(1);
+	std::cout << "L8!" << std::endl;
+	thesky.last_id = sky_serial;
+	std::cout << "L9!" << std::endl;
+
+	return slot_num;
 }
 
 usb_device_skylander::usb_device_skylander(const std::array<u8, 7>& location)
